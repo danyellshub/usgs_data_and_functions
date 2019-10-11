@@ -182,7 +182,7 @@ Even if your function call works, why is my function "brittle?"
 
 Your funciton is brittle because it assumes the downloaded file WILL have a column named X_00060_00003 and X_00060_00003_cd, which many I am sure do. If the data does not have either column (or a single number difference), an error will arise.
 
-An alternative (stronger code) could be to rename the columns in the function, and what you rename them would be an arguement. I could not get it to work with Tidyverse, but I know it is possible to make multiple arguements in a function.
+An alternative (stronger code) could be to rename the columns in the function, and what you rename them would be an arguement.
 
 Hint: hardcoding `q_cfs = X_00060_00003` could be dangerous
 
@@ -208,17 +208,19 @@ Hint: be careful of having two `site` columns.
 
 ```{r}
 
-join_maker <- function(df1, df2){
+join_maker <- function(df1, df2, qsite1, qsite2){
   joined_q <- inner_join(df1 %>%
-                            select(Date, site1_q = q_cfs),
+                            select(Date, q_cfs),
                           df2%>%
-                            select(Date, site2_q = q_cfs),
-                          by="Date")
-    
+                            select(Date, q_cfs),
+                          by="Date")%>%
+    rename(!!qsite1 := 2, 
+           !!qsite2 := 3)%>%
+    as_tibble()
     return(joined_q)
 }
 
-joined_test <- join_maker(nathrop_q, leadville_q)
+joined_test <- join_maker(nathrop_q, leadville_q, 'nathrop_q', 'leadville_q')
 
 ```
 
