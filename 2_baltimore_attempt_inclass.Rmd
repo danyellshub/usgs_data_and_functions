@@ -1,0 +1,165 @@
+---
+title: "Trends in Discharge in Baltimore"
+author: "Danielle Reimanis"
+date: "10/10/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(dataRetrieval)
+library(dygraphs)
+library(lubridate)
+library(xts) 
+
+```
+
+PRACTICE WITH LOOPS
+```{r}
+
+vector <- 100:200
+
+for(i in 1:10){
+  print(vector[i])
+  print('hello')
+}
+
+i=0
+while(i < 10){
+  print(vector[i])
+  print('hello')
+  i=i+1
+}
+
+```
+
+
+# Download the data
+
+## Download site information data first
+
+```{r}
+sites <- c('01589330',
+           '01589320',
+           '01589315',
+           '01589316',
+           '01589312')
+          
+site_meta <- readNWISsite(sites)
+
+names(site_meta)
+view(site_meta)
+
+```
+
+## Download discharde data for the last 10 years
+
+```{r}
+
+bq <- readNWISdv(sites,
+                 parameterCd = '00060',
+                 startDate = '2009-10-01',
+                 endDate = '2019-10-01')%>%
+  rename(q_cfs = X_00060_00003,
+         q_cd = X_00060_00003_cd)
+
+table(bq$q_cd)
+
+```
+
+## Changing units of data
+
+```{r}
+
+bq_area <- bq %>%
+  inner_join(site_meta %>% select(site_no, drain_area_va)) %>%
+  mutate(q_cms = q_cfs*0.0283168) %>% #cfs to cms
+  mutate(q_cmd = q_cms*24*60*60) %>% #cubic meters per day
+  mutate(drain_area_m2 = drain_area_va*2.58999*1000*1000) %>%
+  mutate(q_mmpd = (q_cmd/(drain_area_m2))*1000) #conver to liters per day
+
+bq_area %>%
+  select(Date, site_no, q_mmpd) %>%
+  spread(., key = 'site_no', value = 'q_mmpd') %>%
+  xts(. %>% select(-Date),
+      order.by=.$Date) %>%
+  dygraph(.)
+
+```
+
+
+## Baseflow separator on 1 site
+When practicing loops, try it on one first
+
+```{r}
+bq1 <- bq_area %>%
+  filter(site_no == sites[1])
+
+bq1_baseflow <- EcoHydRology::BaseflowSeparation(bq1$q_mmpd,
+                                                 passes=3)
+
+xts(bq1_baseflow,
+    order.by = bq1$Date)%>%
+  dygraph(.)
+
+```
+
+## For loop repeat for sites
+
+```{r}
+
+length(sites)
+
+q_keeper <- list()
+
+for(i in 1:length(sites)){
+  bq1 <- bq_area %>%
+    filter(site_no == sites[i])
+  
+  bq1_baseflow <- EcoHydRology::BaseflowSeparation(bq1$q_mmpd,
+                                                 passes=3)%>%
+    mutate(site_no = sites[i],
+           date = bq1$Date)%>%
+    rename(q_base = bt,
+           q_mmpd = qft)
+  
+  q_keeper[[i]] <- bq1_baseflow
+  
+}
+
+q_baseflow <- map_dfr(q_keeper,
+                  bind_rows)
+
+q_baseflow %>%
+  select(date, site_no, q_base) %>%
+  spread(., key = 'site_no', value = 'q_base') %>%
+  xts(. %>% select(-date),
+      order.by=.$date) %>%
+  dygraph(.)
+
+```
+
+
+## Nesting
+
+```{r}
+
+baseflower <- function(df){
+  
+  bq_baseflow <- EcoHydRology::BaseflowSeparation(bq1$q_mmpd,
+                                                 passes=3)%>%
+    
+  return(bq_baseflow)
+}
+
+bq_area_nest <- bq_area %>%
+  group_by(site_no) %>%
+  nest()%>%
+  mutate(base_data = map(data,baseflower))
+
+
+q```
+
+

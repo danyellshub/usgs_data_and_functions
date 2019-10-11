@@ -1,8 +1,10 @@
 ---
 title: "Working with USGS Data and Functions"
-author: "Matthew Ross"
-date: "10/7/2019"
+author: "Danielle Reimanis"
+date: "10/8/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -10,7 +12,9 @@ library(tidyverse)
 library(dataRetrieval)
 library(dygraphs) #Time series plotting
 library(tidyr) 
+library(ggthemes)
 library(xts) #Time series objects
+library(dplyr)
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -88,7 +92,7 @@ ggplot(combo_data,aes(x=Date,y=q_cfs,color=site)) +
 ### Density plot 
 
 ```{r}
-ggplot(combo_data,aes(x=q_cfs,color=site)) +
+gplot(combo_data,aes(x=q_cfs,color=site)) +
   geom_density() +
   scale_x_log10()
 
@@ -136,6 +140,7 @@ wide_elc <- xts_maker(elc_q)
 
 dygraph(wide_xts)
 dygraph(wide_elc)
+
 ```
 
 
@@ -154,6 +159,18 @@ plot). Please plot the `combo_data` dataset here.
 
 ```{r}
 
+ggplot_maker <- function(df){
+ p1 <- ggplot(df, aes(x=Date, y=q_cfs, color=site))+
+    geom_line()+
+    theme_few()+
+    labs(y= 'Discharge (cfs)')
+
+  return(p1)
+
+}
+
+ggplot_maker(combo_data)
+
 ```
 
 
@@ -163,9 +180,19 @@ Here I want you to download data from any 2 other USGS site in the world using t
 function works, great! If not, you will need to investigate why? 
 Even if your function call works, why is my function "brittle?"
 
+Your funciton is brittle because it assumes the downloaded file WILL have a column named X_00060_00003 and X_00060_00003_cd, which many I am sure do. If the data does not have either column (or a single number difference), an error will arise.
+
+An alternative (stronger code) could be to rename the columns in the function, and what you rename them would be an arguement. I could not get it to work with Tidyverse, but I know it is possible to make multiple arguements in a function.
+
 Hint: hardcoding `q_cfs = X_00060_00003` could be dangerous
 
 ```{r}
+
+nathrop_q <- q_downloader(site_no = '07091200',
+                           site_id = 'nathrop')
+
+leadville_q <- q_downloader(site_no = '07081200',
+                            site_id = 'leadville')
 
 ```
 
@@ -181,6 +208,18 @@ Hint: be careful of having two `site` columns.
 
 ```{r}
 
+join_maker <- function(df1, df2){
+  joined_q <- inner_join(df1 %>%
+                            select(Date, site1_q = q_cfs),
+                          df2%>%
+                            select(Date, site2_q = q_cfs),
+                          by="Date")
+    
+    return(joined_q)
+}
+
+joined_test <- join_maker(nathrop_q, leadville_q)
+
 ```
 
 
@@ -191,6 +230,22 @@ a dygraph. Here, I want you to make a similar function that preps *and* plots a 
 
 
 ```{r}
+
+xts_graph_maker <- function(df){
+    xts_made <- xts(df %>% select(-Date),
+             order.by = df$Date)
+    
+    dygraph_made <- dygraph(xts_made, 
+                            main = "Comparison of Discharge",
+                            ylab = "Discharge (cfs)")%>%
+      dyOptions(stackedGraph = TRUE) %>%
+      dyRangeSelector(height = 25)
+    
+  return(dygraph_made)
+}
+
+xts_graph_maker(joined_test)
+
 
 ```
 
