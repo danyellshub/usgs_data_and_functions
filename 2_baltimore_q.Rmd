@@ -15,6 +15,8 @@ library(lubridate)
 library(dataRetrieval)
 library(xts)
 library(dygraphs)
+library(trend)
+library(broom)
 
 
 ```
@@ -165,15 +167,12 @@ baseflower <- function(df){
 
 bq_area_nest <- bq_area %>%
   group_by(site_no) %>%
-  nest() 
+  nest() %>%
   mutate(base_data = map(data,baseflower)) %>%
   unnest(data,base_data)
 
-bq_area_nest %>%
-  filter(site_no == sites[3]) %>%
-  unnest(data)
 
-
+# head(bq_area_nest)
 ```
 
 
@@ -182,7 +181,41 @@ bq_area_nest %>%
 
 ```{r}
 
+custom_mk <- function(df){
+  test_results <- mk.test(df$q_base)
+  return(test_results)
+}
+
+bq_trends_mk <- bq_area_nest %>%
+  group_by(site_no) %>%
+  nest()%>%
+  mutate(mk_models = map(data,custom_mk))%>%
+  mutate(tidy_mk = map(mk_models, broom::tidy))
 
 
 ```
 
+## Extracting Sen's slope
+
+```{r}
+
+custom_sens <- function(df){
+  sens_test <- sens.slope(df$q_base)
+  return(sens_test)
+}
+
+sens_slope_extractor <- function(sens_models){
+  slope <- sens_models$estimates
+  return(slope)
+}
+
+bq_trends_slopes <- bq_trends_mk %>%
+  mutate(sens_models = map(data,custom_sens))%>%
+  mutate(tidy_sens = map(sens_models, broom::tidy))%>%
+  mutate(sens_slope = map(sens_models, sens_slope_extractor))%>%
+  mutate(sens_tidy = map(sens_slope, broom::tidy))
+
+unnested_bq <- bq_trends_slopes%>%
+  unnest(sens_tidy)
+  
+```
